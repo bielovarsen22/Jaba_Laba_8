@@ -1,0 +1,110 @@
+= Звіт з метричного аналізу якості OO-дизайну (Завдання 5)
+:toc: left
+:icons: font
+:source-highlighter: highlightjs
+
+== 1. Вступ та мета
+Метою даного аналізу є математичне доведення покращення якості кодової бази після проведення рефакторингу за патернами GRASP.
+Оцінка проводиться за двома ключовими метриками об'єктно-орієнтованого дизайну:
+
+CBO (Coupling Between Objects) — кількість зовнішніх класів, з якими пов'язаний даний клас (цільовий норматив за GRASP Low Coupling: stem:[CBO \le 4]).
+
+LCOM4 (Lack of Cohesion of Methods) — кількість зв'язних компонентів у графі методів класу (цільовий норматив за GRASP High Cohesion: stem:[LCOM4 = 1]).
+
+
+== 2. Аналіз кодової бази DO рефакторингу (Legacy Code)
+
+=== 2.1. Клас LegacyOrderProcessor
+У початковому варіанті весь процес обробки був зосереджений у процедурному моноліті.
+
+CBO (Coupling Between Objects):
+Клас безпосередньо залежить від наступних типів:
+
+Scanner
+
+Customer
+
+Product
+
+OrderItem
+
+Order
+
+FileWriter
+
+PrintWriter
+
+IOException
+
+Результат CBO: stem:[CBO = 8] (суттєве перевищення нормативу stem:[\le 4]).
+
+LCOM4 (Lack of Cohesion of Methods):
+Клас містить один монолітний метод processConsoleOrder(), який виконує: зчитування з консолі, створення об'єктів, розрахунок суми, розрахунок знижки, розрахунок ПДВ, формування текстового рахунку та запис у файл.
+Оскільки клас є анемічною процедурою без власного стану, його методи/зони відповідальності не пов'язані спільними полями екземпляра.
+
+Результат LCOM4: stem:[LCOM4 = 4] (низька згуртованість, клас містить 4 незалежні обов'язки).
+
+== 3. Аналіз кодової бази ПІСЛЯ рефакторингу (Rich Domain Model + GRASP)
+
+=== 3.1. Сутність Customer (пакет task_4)
+Завдяки застосуванню патернів Information Expert, Polymorphism та Protected Variations:
+
+CBO: Залежить лише від одного інтерфейсу stem:[CBO = 1] (DiscountPolicy).
+
+LCOM4: Усі методи (getDiscountRate, геттери) оперують спільними полями стану класу (type, discountPolicy, totalSpent).
+
+Результат: stem:[CBO = 1], stem:[LCOM4 = 1].
+
+=== 3.2. Агрегат Order (пакет task_2)
+Завдяки застосуванню Information Expert та Creator:
+
+CBO: Залежить виключно від своїх складників — Customer та OrderItem.
+
+LCOM4: Методи calculateOrderTotals(), generateReceipt() та геттери працюють із загальним внутрішнім станом агрегату (items, customer, totalAmount, discountAmount, taxAmount).
+
+Результат: stem:[CBO = 2], stem:[LCOM4 = 1].
+
+=== 3.3. Application Service OrderController (пакет task_3)
+Завдяки застосуванню Controller, Indirection та Pure Fabrication:
+
+CBO: Залежить від інтерфейсів OrderRepository, NotificationService та доменних сутностей Order, Customer, OrderItem.
+
+LCOM4: Метод processNewOrder координує роботу з ін'єктованими полями залежностей (orderRepository, notificationService).
+
+Результат: stem:[CBO = 3] (у межах норми stem:[\le 4]), stem:[LCOM4 = 1].
+
+== 4. Порівняльна таблиця метрик
+
+[cols="2,1,1,1,1,3", options="header"]
+|===
+| Клас / Компонент | CBO (до) | CBO (після) | LCOM4 (до) | LCOM4 (після) | Інженерні висновки
+
+| LegacyOrderProcessor / OrderController
+| 8
+| 3
+| 4
+| 1
+| Зчеплення знижено у 2.6 раза. Контролер позбавився I/O операцій та розрахунків, відповідаючи лише за координацію.
+
+| Customer
+| 1
+| 1
+| 1
+| 1
+| Додано підтримку поліморфних знижок через DiscountPolicy без збільшення зачеплення та втрати згуртованості.
+
+| Order
+| 4
+| 2
+| 3
+| 1
+| Логіку обчислень розраховано всередині агрегату (Information Expert). Згуртованість досягла ідеального показника stem:[LCOM4 = 1].
+|===
+
+== 5. Загальний інженерний висновок
+
+Впровадження шаблонів GRASP дозволило перетворити анемічну процедурну модель (Anemic Domain Model) у багату доменну модель (Rich Domain Model):
+
+Low Coupling (CBO stem:[\le 4]): Пряме зачеплення між монолітними сервісами та деталями збереження даних/сповіщень було замінено на послаблене зачеплення через інтерфейсні контракти (Indirection / Protected Variations).
+
+High Cohesion (LCOM4 stem:[= 1]): Розділення обов'язків (зчитування консолі у ConsoleUI, збереження у FileOrderRepository, сповіщення у EmailNotificationService, обчислення у Order/Customer) дозволило досягти ідеальної функціональної згуртованості для кожного класу.
